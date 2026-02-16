@@ -8,14 +8,14 @@ import (
 	"github.com/arjungandhi/calendar"
 	"github.com/charmbracelet/huh"
 	"github.com/rwxrob/bonzai"
-	Z "github.com/rwxrob/bonzai/z"
-	"github.com/rwxrob/help"
+	"github.com/rwxrob/bonzai/cmds/help"
+	"github.com/rwxrob/bonzai/comp"
 )
 
 // calendarCompleter completes calendar names for commands that take a calendar arg.
 type calendarCompleter struct{}
 
-func (calendarCompleter) Complete(_ bonzai.Command, args ...string) []string {
+func (calendarCompleter) Complete(args ...string) []string {
 	mgr, err := calendar.NewCalendarManager()
 	if err != nil {
 		return nil
@@ -37,17 +37,18 @@ func (calendarCompleter) Complete(_ bonzai.Command, args ...string) []string {
 	return names
 }
 
-var Cmd = &Z.Cmd{
-	Name:     "calendar",
-	Summary:  "manage calendars and events",
-	Commands: []*Z.Cmd{help.Cmd, addCmd, removeCmd, syncCmd, listCmd, eventsCmd, getCmd},
+var Cmd = &bonzai.Cmd{
+	Name:  "calendar",
+	Short: "manage calendars and events",
+	Comp:  comp.CmdsOpts,
+	Cmds:  []*bonzai.Cmd{help.Cmd, addCmd, removeCmd, syncCmd, listCmd, eventsCmd, getCmd},
 }
 
-var addCmd = &Z.Cmd{
-	Name:    "add",
-	Summary: "add a calendar source by iCal URL",
-	Usage:   "[name] [url]",
-	Call: func(x *Z.Cmd, args ...string) error {
+var addCmd = &bonzai.Cmd{
+	Name:  "add",
+	Short: "add a calendar source by iCal URL",
+	Usage: "[name] [url]",
+	Do: func(x *bonzai.Cmd, args ...string) error {
 		var name, url string
 
 		if len(args) >= 2 {
@@ -87,13 +88,15 @@ var addCmd = &Z.Cmd{
 	},
 }
 
-var removeCmd = &Z.Cmd{
-	Name:    "remove",
-	Summary: "remove a calendar source",
-	Usage:   "<name>",
-	MinArgs: 1,
-	Comp:    calendarCompleter{},
-	Call: func(x *Z.Cmd, args ...string) error {
+var removeCmd = &bonzai.Cmd{
+	Name:  "remove",
+	Short: "remove a calendar source",
+	Usage: "<name>",
+	Comp:  calendarCompleter{},
+	Do: func(x *bonzai.Cmd, args ...string) error {
+		if len(args) < 1 {
+			return fmt.Errorf("usage: calendar remove <name>")
+		}
 		mgr, err := calendar.NewCalendarManager()
 		if err != nil {
 			return err
@@ -106,10 +109,10 @@ var removeCmd = &Z.Cmd{
 	},
 }
 
-var syncCmd = &Z.Cmd{
-	Name:    "sync",
-	Summary: "sync all calendars from their iCal URLs",
-	Call: func(x *Z.Cmd, args ...string) error {
+var syncCmd = &bonzai.Cmd{
+	Name:  "sync",
+	Short: "sync all calendars from their iCal URLs",
+	Do: func(x *bonzai.Cmd, args ...string) error {
 		mgr, err := calendar.NewCalendarManager()
 		if err != nil {
 			return err
@@ -118,10 +121,10 @@ var syncCmd = &Z.Cmd{
 	},
 }
 
-var listCmd = &Z.Cmd{
-	Name:    "list",
-	Summary: "list configured calendars",
-	Call: func(x *Z.Cmd, args ...string) error {
+var listCmd = &bonzai.Cmd{
+	Name:  "list",
+	Short: "list configured calendars",
+	Do: func(x *bonzai.Cmd, args ...string) error {
 		mgr, err := calendar.NewCalendarManager()
 		if err != nil {
 			return err
@@ -141,11 +144,11 @@ var listCmd = &Z.Cmd{
 	},
 }
 
-var eventsCmd = &Z.Cmd{
-	Name:    "events",
-	Summary: "list upcoming events",
-	Usage:   "[today|week|month|YYYY-MM-DD [YYYY-MM-DD]]",
-	Call: func(x *Z.Cmd, args ...string) error {
+var eventsCmd = &bonzai.Cmd{
+	Name:  "events",
+	Short: "list upcoming events",
+	Usage: "[today|week|month|YYYY-MM-DD [YYYY-MM-DD]]",
+	Do: func(x *bonzai.Cmd, args ...string) error {
 		mgr, err := calendar.NewCalendarManager()
 		if err != nil {
 			return err
@@ -202,12 +205,14 @@ var eventsCmd = &Z.Cmd{
 	},
 }
 
-var getCmd = &Z.Cmd{
-	Name:    "get",
-	Summary: "get event details by UID",
-	Usage:   "[--ics] <uid>",
-	MinArgs: 1,
-	Call: func(x *Z.Cmd, args ...string) error {
+var getCmd = &bonzai.Cmd{
+	Name:  "get",
+	Short: "get event details by UID",
+	Usage: "[--ics] <uid>",
+	Do: func(x *bonzai.Cmd, args ...string) error {
+		if len(args) < 1 {
+			return fmt.Errorf("usage: calendar get [--ics] <uid>")
+		}
 		showICS := false
 		if args[0] == "--ics" {
 			showICS = true
@@ -237,5 +242,5 @@ var getCmd = &Z.Cmd{
 }
 
 func main() {
-	Cmd.Run()
+	Cmd.Exec()
 }
