@@ -13,6 +13,33 @@ import (
 	ical "github.com/emersion/go-ical"
 )
 
+// FormatEventJSON returns a single event as indented JSON.
+func FormatEventJSON(e *Event) (string, error) {
+	data, err := json.MarshalIndent(e, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// FormatEventsJSON returns a slice of events as indented JSON.
+func FormatEventsJSON(events []Event) (string, error) {
+	data, err := json.MarshalIndent(events, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// FormatSourcesJSON returns a slice of sources as indented JSON.
+func FormatSourcesJSON(sources []Source) (string, error) {
+	data, err := json.MarshalIndent(sources, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 // Source represents a calendar source with a name and iCal URL.
 type Source struct {
 	Name string `json:"name"`
@@ -327,6 +354,12 @@ func parseEventTime(event *ical.Event, prop string) (time.Time, bool) {
 		return t, true
 	}
 	return t, false
+}
+
+// GetEventICS returns the raw ICS data for an event by UID.
+func (m *CalendarManager) GetEventICS(uid string) (string, error) {
+	_, raw, err := m.GetEvent(uid)
+	return raw, err
 }
 
 // GetEvent finds an event by UID across all calendars.
