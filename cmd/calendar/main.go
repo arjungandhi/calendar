@@ -9,48 +9,38 @@ import (
 
 	"github.com/arjungandhi/calendar"
 	"github.com/charmbracelet/huh"
-	"github.com/rwxrob/bonzai"
-	"github.com/rwxrob/bonzai/cmds/help"
-	"github.com/rwxrob/bonzai/comp"
+	"github.com/spf13/cobra"
 )
 
-// calendarCompleter completes calendar names for commands that take a calendar arg.
-type calendarCompleter struct{}
-
-func (calendarCompleter) Complete(args ...string) []string {
+func validCalendarNames(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	mgr, err := calendar.NewCalendarManager()
 	if err != nil {
-		return nil
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	sources, err := mgr.LoadSources()
 	if err != nil {
-		return nil
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	prefix := ""
-	if len(args) > 0 {
-		prefix = strings.ToLower(args[0])
-	}
+	prefix := strings.ToLower(toComplete)
 	var names []string
 	for _, s := range sources {
 		if prefix == "" || strings.HasPrefix(strings.ToLower(s.Name), prefix) {
 			names = append(names, s.Name)
 		}
 	}
-	return names
+	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
-var Cmd = &bonzai.Cmd{
-	Name:  "calendar",
+var rootCmd = &cobra.Command{
+	Use:   "calendar",
 	Short: "manage calendars and events",
-	Comp:  comp.CmdsOpts,
-	Cmds:  []*bonzai.Cmd{help.Cmd, addCmd, removeCmd, syncCmd, listCmd, eventsCmd, getCmd},
 }
 
-var addCmd = &bonzai.Cmd{
-	Name:  "add",
+var addCmd = &cobra.Command{
+	Use:   "add [name] [url]",
 	Short: "add a calendar source by iCal URL",
-	Usage: "[name] [url]",
-	Do: func(x *bonzai.Cmd, args ...string) error {
+	Args:  cobra.MaximumNArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
 		var name, url string
 
 		if len(args) >= 2 {
@@ -90,15 +80,12 @@ var addCmd = &bonzai.Cmd{
 	},
 }
 
-var removeCmd = &bonzai.Cmd{
-	Name:  "remove",
-	Short: "remove a calendar source",
-	Usage: "<name>",
-	Comp:  calendarCompleter{},
-	Do: func(x *bonzai.Cmd, args ...string) error {
-		if len(args) < 1 {
-			return fmt.Errorf("usage: calendar remove <name>")
-		}
+var removeCmd = &cobra.Command{
+	Use:               "remove <name>",
+	Short:             "remove a calendar source",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: validCalendarNames,
+	RunE: func(cmd *cobra.Command, args []string) error {
 		mgr, err := calendar.NewCalendarManager()
 		if err != nil {
 			return err
@@ -111,10 +98,10 @@ var removeCmd = &bonzai.Cmd{
 	},
 }
 
-var syncCmd = &bonzai.Cmd{
-	Name:  "sync",
+var syncCmd = &cobra.Command{
+	Use:   "sync",
 	Short: "sync all calendars from their iCal URLs",
-	Do: func(x *bonzai.Cmd, args ...string) error {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		mgr, err := calendar.NewCalendarManager()
 		if err != nil {
 			return err
@@ -123,16 +110,11 @@ var syncCmd = &bonzai.Cmd{
 	},
 }
 
-var listCmd = &bonzai.Cmd{
-	Name:  "list",
-	Short: "list configured calendars (-o table|json)",
-	Usage: "[-o format]",
-	Opts:  "table|json",
-	Do: func(x *bonzai.Cmd, args ...string) error {
-		format, _, err := parseOutputFlag(args, x.OptsSlice())
-		if err != nil {
-			return err
-		}
+var listCmd = &cobra.Command{
+	Use:   "list",
+	Short: "list configured calendars",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		format, _ := cmd.Flags().GetString("output")
 		mgr, err := calendar.NewCalendarManager()
 		if err != nil {
 			return err
@@ -164,16 +146,11 @@ var listCmd = &bonzai.Cmd{
 	},
 }
 
-var eventsCmd = &bonzai.Cmd{
-	Name:  "events",
-	Short: "list upcoming events (-o table|json|ics)",
-	Usage: "[-o format] [today|week|month|YYYY-MM-DD [YYYY-MM-DD]]",
-	Opts:  "table|json|ics",
-	Do: func(x *bonzai.Cmd, args ...string) error {
-		format, rest, err := parseOutputFlag(args, x.OptsSlice())
-		if err != nil {
-			return err
-		}
+var eventsCmd = &cobra.Command{
+	Use:   "events [today|week|month|YYYY-MM-DD [YYYY-MM-DD]]",
+	Short: "list upcoming events",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		format, _ := cmd.Flags().GetString("output")
 
 		mgr, err := calendar.NewCalendarManager()
 		if err != nil {
@@ -184,8 +161,8 @@ var eventsCmd = &bonzai.Cmd{
 		from := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		to := from.AddDate(0, 0, 30)
 
-		if len(rest) >= 1 {
-			switch rest[0] {
+		if len(args) >= 1 {
+			switch args[0] {
 			case "today":
 				to = from.AddDate(0, 0, 1)
 			case "week":
@@ -193,16 +170,16 @@ var eventsCmd = &bonzai.Cmd{
 			case "month":
 				to = from.AddDate(0, 1, 0)
 			default:
-				t, err := time.Parse("2006-01-02", rest[0])
+				t, err := time.Parse("2006-01-02", args[0])
 				if err != nil {
-					return fmt.Errorf("invalid date %q (use YYYY-MM-DD, today, week, or month)", rest[0])
+					return fmt.Errorf("invalid date %q (use YYYY-MM-DD, today, week, or month)", args[0])
 				}
 				from = t
 				to = t.AddDate(0, 0, 1)
-				if len(rest) >= 2 {
-					t2, err := time.Parse("2006-01-02", rest[1])
+				if len(args) >= 2 {
+					t2, err := time.Parse("2006-01-02", args[1])
 					if err != nil {
-						return fmt.Errorf("invalid end date %q (use YYYY-MM-DD)", rest[1])
+						return fmt.Errorf("invalid end date %q (use YYYY-MM-DD)", args[1])
 					}
 					to = t2.AddDate(0, 0, 1)
 				}
@@ -251,26 +228,19 @@ var eventsCmd = &bonzai.Cmd{
 	},
 }
 
-var getCmd = &bonzai.Cmd{
-	Name:  "get",
-	Short: "get event details by uid (-o table|json|ics)",
-	Usage: "[-o format] <uid>",
-	Opts:  "table|json|ics",
-	Do: func(x *bonzai.Cmd, args ...string) error {
-		format, rest, err := parseOutputFlag(args, x.OptsSlice())
-		if err != nil {
-			return err
-		}
-		if len(rest) == 0 {
-			return fmt.Errorf("usage: calendar get [-o format] <uid>")
-		}
+var getCmd = &cobra.Command{
+	Use:   "get <uid>",
+	Short: "get event details by uid",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		format, _ := cmd.Flags().GetString("output")
 
 		mgr, err := calendar.NewCalendarManager()
 		if err != nil {
 			return err
 		}
 
-		event, raw, err := mgr.GetEvent(rest[0])
+		event, raw, err := mgr.GetEvent(args[0])
 		if err != nil {
 			return err
 		}
@@ -291,35 +261,16 @@ var getCmd = &bonzai.Cmd{
 	},
 }
 
-// parseOutputFlag extracts -o <format> from args, returning the format
-// (defaulting to "table") and the remaining args.
-func parseOutputFlag(args []string, valid []string) (string, []string, error) {
-	format := "table"
-	var rest []string
-	for i := 0; i < len(args); i++ {
-		if args[i] == "-o" {
-			if i+1 >= len(args) {
-				return "", nil, fmt.Errorf("-o requires a format: %s", strings.Join(valid, ", "))
-			}
-			format = strings.ToLower(args[i+1])
-			found := false
-			for _, v := range valid {
-				if format == v {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return "", nil, fmt.Errorf("unknown output format %q: use %s", format, strings.Join(valid, ", "))
-			}
-			i++ // skip the format value
-		} else {
-			rest = append(rest, args[i])
-		}
-	}
-	return format, rest, nil
+func init() {
+	listCmd.Flags().StringP("output", "o", "table", "output format (table, json)")
+	eventsCmd.Flags().StringP("output", "o", "table", "output format (table, json, ics)")
+	getCmd.Flags().StringP("output", "o", "table", "output format (table, json, ics)")
+
+	rootCmd.AddCommand(addCmd, removeCmd, syncCmd, listCmd, eventsCmd, getCmd)
 }
 
 func main() {
-	Cmd.Exec()
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }
